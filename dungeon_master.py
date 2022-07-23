@@ -10,7 +10,7 @@ C_FILE = "dungeon.c"
 CRASH = "\tchar* buff = malloc(8);\n\tputchar(buff[0xffffffff]);\n"
 
 # function pointer mode uses a fp to call the final target func
-FP_MODE = True
+FP_MODE = False
 
 # internal stuff
 name = 0            # name counter for decoy-functions
@@ -25,7 +25,7 @@ def new_name():
     return name
 
 
-def make_func(my_name, depth, spread, max_depth, stump, loop, t_path=False, t_depth=None):
+def make_func(my_name, depth, spread, max_depth, stump, t_path=False, t_depth=None):
     global name, t_name, magic_str
 
     is_main = True if (depth == 0) else False
@@ -58,13 +58,13 @@ def make_func(my_name, depth, spread, max_depth, stump, loop, t_path=False, t_de
                     m_chr = chr(random.randint(32, 126))
             magic_chr.append(m_chr)
             magic_str += m_chr
-            make_func(my_name + 1, depth + 1, spread, max_depth, stump, loop, t_path=True, t_depth=t_depth)
-
+            make_func(my_name + 1, depth + 1, spread, max_depth, stump, t_path=True, t_depth=t_depth)
 
             if (depth + 1 == t_depth) and FP_MODE:
                 t_call = f"\tif (input[{depth}] == '{m_chr}') {{void (*fp)(char* input) = target_{my_name + 1}; fp(input);}}\n"
             else:
                 t_call = f"\tif (input[{depth}] == '{m_chr}') {{target_{my_name + 1}(input);}}\n"
+
 
     # generate children
     child_lst = []
@@ -78,21 +78,15 @@ def make_func(my_name, depth, spread, max_depth, stump, loop, t_path=False, t_de
         magic_chr.append(m_chr)
         call = f"\tif (input[{depth}] == '{m_chr}') {{func_{child_name}(input);}}\n"
         child_calls.append(call)
-        make_func(child_name, depth + 1, spread, max_depth, stump, loop)
-
-    # decide if loops back to another func (main is never part of a loop)
-    loop_roll = random.random()
-    loops = True if (loop_roll <= loop and not is_main) else False
-    if loops:
-        loop_to = random.randint(1, name) if (name > 1) else 1
+        make_func(child_name, depth + 1, spread, max_depth, stump)
 
     # generate function header
     if is_main:
-        func_header = f"int main(int argc, char** argv) {{\n"
+        func_header = f"#define BUFF_SIZE 128\n"
+        func_header += f"int main(int argc, char** argv) {{\n"
         # process input
-        func_header += f"\tchar* input = argv[1];\n"
-        # prevent from crashing if no input
-        func_header += f'\tif (argc < 2) {{printf("no input\\n"); return 0;}}\n'
+        func_header += f"\tchar input[BUFF_SIZE];\n"
+        func_header += f"\tread(STDIN_FILENO, input, BUFF_SIZE);\n"
     elif not t_path:
         func_header = f"void func_{my_name}(char* input) {{\n"
     else:
@@ -109,8 +103,6 @@ def make_func(my_name, depth, spread, max_depth, stump, loop, t_path=False, t_de
         if t_path and is_final:
             tmp.write("\t/* CHRASH HERE!!! */\n")
             tmp.write(CRASH)
-        if loops:
-            tmp.write(f"\tfunc_{loop_to}(input);\n")
         if is_main:
             tmp.write("\treturn 0;\n")
         tmp.write("}\n\n")
@@ -119,19 +111,18 @@ def make_func(my_name, depth, spread, max_depth, stump, loop, t_path=False, t_de
 # main (duh!)
 if __name__ == "__main__":
     # parameters
-    spread = [1,5]      # how many brances per node (range for random)
-    max_depth = 7       # max depth for decoy brances
-    stump = 0.1         # propability for a decoy func to be a leaf before reaching max_depth
-    loop = 0.2          # propability for a func to loop to another func
-    t_depth = 5         # depth of the target function that contains the crash
+    spread = [10,30]      # how many brances per node (range for random)
+    max_depth = 3       # max depth for decoy brances
+    stump = 0.3         # propability for a decoy func to be a leaf before reaching max_depth
+    t_depth = 3         # depth of the target function that contains the crash
 
     print(f"Creating dungeon...")
 
     # build code
-    make_func(0, 0, spread, max_depth, stump, loop, t_depth=t_depth)
+    make_func(0, 0, spread, max_depth, stump, t_depth=t_depth)
 
     # write out code
-    includes = f"#include <stdlib.h>\n#include <stdio.h>\n\n"
+    includes = f"#include <stdlib.h>\n#include <stdio.h>\n#include <string.h>\n#include <unistd.h>\n\n"
     with open(C_FILE, 'w') as c_file:
         c_file.write(includes)
         c_file.write("/* PROTOTYPES */\n")
