@@ -101,7 +101,7 @@ def make_func(my_name, depth, spread, max_depth, stump, t_path=False, t_depth=No
             for c in child_calls:
                 tmp.write(c)
         if t_path and is_final:
-            tmp.write("\t/* CHRASH HERE!!! */\n")
+            tmp.write("\t/* CRASH HERE!!! */\n")
             tmp.write(CRASH)
         if is_main:
             tmp.write("\treturn 0;\n")
